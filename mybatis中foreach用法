@@ -1,0 +1,95 @@
+foreach一共有三种类型，分别为List,[](array),Map三种
+
+
+foreach属性
+属性	描述
+item	循环体中的具体对象。支持属性的点路径访问，如item.age,item.info.details。 具体说明：在list和数组中是其中的对象，在map中是value。 该参数为必选。
+collection	要做foreach的对象，作为入参时，List<?>对象默认用list代替作为键，数组对象有array代替作为键，Map对象用map代替作为键。 当然在作为入参时可以使用@Param("keyName")来设置键，设置keyName后，list,array,map将会失效。 除了入参这种情况外，还有一种作为参数对象的某个字段的时候。举个例子： 如果User有属性List ids。入参是User对象，那么这个collection = "ids" 如果User有属性Ids ids;其中Ids是个对象，Ids有个属性List id;入参是User对象，那么collection = "ids.id" 上面只是举例，具体collection等于什么，就看你想对那个元素做循环。 该参数为必选。
+separator	元素之间的分隔符，例如在in()的时候，separator=","会自动在元素中间用“,“隔开，避免手动输入逗号导致sql错误，如in(1,2,)这样。该参数可选。
+open	foreach代码的开始符号，一般是(和close=")"合用。常用在in(),values()时。该参数可选。
+close	foreach代码的关闭符号，一般是)和open="("合用。常用在in(),values()时。该参数可选。
+index	在list和数组中,index是元素的序号，在map中，index是元素的key，该参数可选。
+
+
+实例一、
+注：select count(*) from users WHERE id in ( ? , ? ) 
+
+<select id="countByUserList" resultType="_int" parameterType="list">
+select count(*) from users
+  <where>
+    id in
+    <foreach item="item" collection="list" separator="," open="(" close=")" index="">
+      #{item.id, jdbcType=NUMERIC}
+    </foreach>
+  </where>
+</select>
+
+
+实例二、
+注：and （op.operation_type_id = ? or op.operation_type_id = ?）
+
+and
+<foreach collection="operation_type_id" item="operationTypeId" index="index"  open="(" separator="or" close=")">
+ op.operation_type_id = #{operationTypeId} 
+</foreach>
+
+实例三、
+注：insert into string_string (key, value) values (?, ?) , (?, ?) 
+map和List,array相比，map是用K,V存储的，在foreach中，使用map时，index属性值为map中的Key的值。
+因为map中的Key不同于list,array中的索引，所以会有更丰富的用法。
+表中需要两个值，正好和K,V对应，因而map中的一个K,V就对应一条数据，如果map中有多个K,V，就会保存多个结果。
+
+<insert id="ins_string_string">
+  insert into string_string (key, value) values
+  <foreach item="item" index="key" collection="map"
+      open="" separator="," close="">(#{key}, #{item})</foreach>
+</insert>
+
+
+下面再看一个select的例子：
+注：select count(*) from key_cols where col_a = ? AND col_b = ?
+
+<select id="sel_key_cols" resultType="int">
+  select count(*) from key_cols where
+  <foreach item="item" index="key" collection="map"
+      open="" separator="AND" close="">${key} = #{item}</foreach>
+</select>
+
+ 可以看到这里用key=value来作为查询条件，对于动态的查询，这种处理方式可以借鉴。
+ 一定要注意到$和#的区别，$的参数直接输出，#的参数会被替换为?，然后传入参数值执行。
+ 
+ 
+实例四、数组
+
+ public void testQuery() {
+        ColInfoDao dao=(ColInfoDao)ctx.getBean("colInfoDao");
+        Map map = new HashMap();
+        map.put("userId", "tom");
+        map.put("password", "123");
+        String[] a = { "20000001", "20000002" };
+        map.put("classIds", Arrays.asList(a));
+        Object password = dao.query(map);
+        System.out.println("password:" + password);
+        Assert.assertEquals("123", password);
+    }
+    
+ XML：（感觉不适合mybatis，可以使用在ibatis中，iBatis 2.x 和 MyBatis 3.0.x）
+ <select id="queryPasswordByUserId" parameterClass="java.util.Map"      resultClass="java.lang.String">
+        <![CDATA[
+        select PASSWORD as password from T_S_P_USER
+        ]]>
+        <dynamic prepend="where">
+            <isNotEmpty prepend="AND" property="userId">
+                USER_ID=#userId#
+            </isNotEmpty>
+            <isNotEmpty prepend="AND" property="password">
+                PASSWORD=#password#
+            </isNotEmpty>
+            <isNotEmpty prepend="AND" property="classIds">
+                <iterate property="classIds" open="(" conjunction="OR" close=")">
+                    CLASS_ID = #classIds[]#
+                </iterate>
+            </isNotEmpty>
+        </dynamic>
+</select>
+ 
